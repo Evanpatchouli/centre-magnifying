@@ -1,0 +1,10 @@
+{
+  "name": "native-capture-addon",
+  "version": "0.1.0",
+  "private": true,
+  "main": "build/Release/native_capture.node",
+  "scripts": {
+    "build": "node-gyp rebuild",
+    "clean": "node-gyp clean"
+  }
+}

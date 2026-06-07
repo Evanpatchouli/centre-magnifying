@@ -1,0 +1,55 @@
+{
+  "name": "centre-magnifying",
+  "version": "0.1.0",
+  "description": "Electron + React window-centre magnifier",
+  "main": "out/main/index.js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-filter-wgc-logs.mjs",
+    "dev:raw": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:addon": "cd native/capture-addon && node-gyp rebuild",
+    "build:addon:clean": "cd native/capture-addon && node-gyp clean",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "dotenv": "^17.4.2",
+    "electron-store": "^10.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uiohook-napi": "^1.5.5",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "node-addon-api": "^8.8.0",
+    "node-gyp": "^12.4.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.centre.magnifying",
+    "productName": "Centre Magnifying",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
