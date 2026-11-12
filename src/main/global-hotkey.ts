@@ -82,18 +82,24 @@ export function startRecording(): Promise<string> {
   return new Promise((resolve) => {
     recordingResolve = resolve
     recordingTimer = setTimeout(() => {
-      recordingResolve = null
-      resolve('')
+      finishRecording('')
     }, 15_000)
   })
 }
 
-export function cancelRecording(): void {
+/** Resolve the pending recording promise once, with the captured key or an empty string. */
+function finishRecording(accelerator: string): void {
   if (recordingTimer !== null) {
     clearTimeout(recordingTimer)
     recordingTimer = null
   }
+  const resolve = recordingResolve
   recordingResolve = null
+  resolve?.(accelerator)
+}
+
+export function cancelRecording(): void {
+  finishRecording('')
 }
 
 /* ── Event handlers ────────────────────────────────────────────── */
@@ -126,9 +132,7 @@ function handleKeyDown(e: UiohookKeyboardEvent): void {
 
   // Recording mode
   if (recordingResolve) {
-    const resolve = recordingResolve
-    cancelRecording()
-    resolve(acc)
+    finishRecording(acc)
     return
   }
 
@@ -148,9 +152,7 @@ function handleMouseDown(e: UiohookMouseEvent): void {
 
   // Recording mode
   if (recordingResolve) {
-    const resolve = recordingResolve
-    cancelRecording()
-    resolve(acc)
+    finishRecording(acc)
     return
   }
 
