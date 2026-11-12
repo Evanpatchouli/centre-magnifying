@@ -53,6 +53,16 @@ pnpm install
 pnpm dev
 ```
 
+## 编译原生捕获模块
+
+Windows 上使用 Native WGC 模式前，需安装 Visual Studio C++ 桌面开发工具和 Python，然后执行：
+
+```bash
+npm run build:addon
+```
+
+该命令使用项目安装的 Electron 版本及其头文件编译模块；首次运行需要联网下载头文件。
+
 ## 打包
 
 ```bash

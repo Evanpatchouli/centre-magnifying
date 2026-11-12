@@ -23,6 +23,18 @@ function extractHwndFromSourceId(sourceId: string): number | null {
 /* ── IPC handlers ───────────────────────────────────────────────── */
 
 export function registerIpcHandlers(): void {
+  ipcMain.handle('window:control', (event, action: 'minimize' | 'toggle-maximize' | 'close') => {
+    const win = getSettingsWindow()
+    if (!win || event.sender !== win.webContents) return
+    if (action === 'minimize') win.minimize()
+    else if (action === 'toggle-maximize') win.isMaximized() ? win.unmaximize() : win.maximize()
+    else if (action === 'close') win.close()
+  })
+  ipcMain.handle('window:is-maximized', (event) => {
+    const win = getSettingsWindow()
+    return !!win && event.sender === win.webContents && win.isMaximized()
+  })
+
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('features:get-render-modes', () => getRenderModeFeatures())
 

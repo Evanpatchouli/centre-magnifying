@@ -2,6 +2,13 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { CaptureSourceDTO, MagnifierSettings, RenderModeFeatures } from '../main/types'
 
 const api = {
+  controlWindow: (action: 'minimize' | 'toggle-maximize' | 'close'): Promise<void> => ipcRenderer.invoke('window:control', action),
+  isWindowMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:is-maximized'),
+  onWindowMaximized: (callback: (maximized: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, maximized: boolean) => callback(maximized)
+    ipcRenderer.on('window:maximized', listener)
+    return () => ipcRenderer.removeListener('window:maximized', listener)
+  },
   getSettings: (): Promise<MagnifierSettings> => ipcRenderer.invoke('settings:get'),
   setSettings: (settings: MagnifierSettings): Promise<MagnifierSettings> => ipcRenderer.invoke('settings:set', settings),
   getRenderModeFeatures: (): Promise<RenderModeFeatures> => ipcRenderer.invoke('features:get-render-modes'),

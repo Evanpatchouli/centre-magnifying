@@ -1,13 +1,13 @@
 import { Menu, Tray, app, nativeImage } from 'electron'
 import { showSettingsWindow } from './windows'
+import { join } from 'node:path'
 
 let tray: Tray | null = null
 
 export function createTray(): Tray {
   if (tray) return tray
 
-  const image = nativeImage.createFromDataURL(createTrayIconDataUrl())
-  image.setTemplateImage(true)
+  const image = nativeImage.createFromPath(join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'resources', 'icon.ico'))
 
   tray = new Tray(image)
   tray.setToolTip('Centre Magnifying')
@@ -29,11 +29,3 @@ export function createTray(): Tray {
   return tray
 }
 
-function createTrayIconDataUrl(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-    <circle cx="14" cy="14" r="8" fill="none" stroke="black" stroke-width="3"/>
-    <path d="M20 20 L28 28" stroke="black" stroke-width="3" stroke-linecap="round"/>
-    <circle cx="14" cy="14" r="3" fill="black"/>
-  </svg>`
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
-}

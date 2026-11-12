@@ -84,6 +84,8 @@ export function showSettingsWindow(): BrowserWindow {
     height: 900,
     minWidth: 900,
     minHeight: 900,
+    frame: false,
+    icon: join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'resources', 'icon.ico'),
     title: '设置 - Centre Magnifying',
     show: false,
     webPreferences: {
@@ -99,6 +101,9 @@ export function showSettingsWindow(): BrowserWindow {
   } else {
     void settingsWindow.loadFile(join(__dirname, '../renderer/settings/index.html'))
   }
+
+  settingsWindow.on('maximize', () => settingsWindow?.webContents.send('window:maximized', true))
+  settingsWindow.on('unmaximize', () => settingsWindow?.webContents.send('window:maximized', false))
 
   settingsWindow.once('ready-to-show', () => {
     settingsWindow?.show()

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import appIcon from "../../../resources/icon.svg";
 import { DEFAULT_SETTINGS } from "../shared/defaults";
 import type { CaptureSourceDTO, MagnifierSettings, RenderModeFeatures } from "../shared/types";
 
@@ -16,6 +17,7 @@ function getAppApi(): Window["api"] | null {
 }
 
 export function SettingsApp(): JSX.Element {
+  const [maximized, setMaximized] = useState(false);
   const [settings, setSettings] = useState<MagnifierSettings>(DEFAULT_SETTINGS);
   const [sources, setSources] = useState<CaptureSourceDTO[]>([]);
   const [loadingSources, setLoadingSources] = useState(false);
@@ -35,6 +37,8 @@ export function SettingsApp(): JSX.Element {
     }
 
     let disposed = false;
+    void api.isWindowMaximized().then((value) => { if (!disposed) setMaximized(value); });
+    const offMaximized = api.onWindowMaximized(setMaximized);
 
     Promise.all([api.getSettings(), api.getRenderModeFeatures(), loadSources()])
       .then(([loadedSettings, features]) => {
@@ -56,6 +60,7 @@ export function SettingsApp(): JSX.Element {
     return () => {
       disposed = true;
       off();
+      offMaximized();
       // Clean up hotkey recording ESC listener if active
       if (escHandlerRef.current) {
         window.removeEventListener('keydown', escHandlerRef.current, true);
@@ -201,6 +206,15 @@ export function SettingsApp(): JSX.Element {
   }
 
   return (
+    <>
+    <header className="titlebar">
+      <div className="titlebar-brand"><img src={appIcon} alt="" /><span>Centre Magnifying</span><span className="titlebar-section">设置</span></div>
+      <div className="window-controls">
+        <button type="button" className="window-control" aria-label="最小化" title="最小化" onClick={() => void getAppApi()?.controlWindow('minimize')}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10" /></svg></button>
+        <button type="button" className="window-control" aria-label={maximized ? '还原' : '最大化'} title={maximized ? '还原' : '最大化'} onClick={() => void getAppApi()?.controlWindow('toggle-maximize')}><svg viewBox="0 0 16 16" aria-hidden="true">{maximized ? <path d="M5 4V2.5h8.5V11H12M2.5 5h9v8.5h-9z" /> : <path d="M3 3h10v10H3z" />}</svg></button>
+        <button type="button" className="window-control window-close" aria-label="关闭" title="关闭" onClick={() => void getAppApi()?.controlWindow('close')}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
+      </div>
+    </header>
     <main className="page">
       <section className="card">
         <h1>Centre Magnifying 设置</h1>
@@ -439,5 +453,6 @@ export function SettingsApp(): JSX.Element {
         </div>
       </section>
     </main>
+    </>
   );
 }

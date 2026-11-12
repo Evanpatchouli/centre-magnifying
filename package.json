@@ -9,7 +9,7 @@
     "dev": "node scripts/dev-filter-wgc-logs.mjs",
     "dev:raw": "electron-vite dev",
     "build": "electron-vite build",
-    "build:addon": "cd native/capture-addon && node-gyp rebuild",
+    "build:addon": "node scripts/build-addon.mjs",
     "build:addon:clean": "cd native/capture-addon && node-gyp clean",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
@@ -49,8 +49,18 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis"
-    }
+      "target": "nsis",
+      "icon": "resources/icon.ico"
+    },
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": [
+          "icon.ico"
+        ]
+      }
+    ]
   },
   "allowScripts": {
     "electron@33.4.11": true,
