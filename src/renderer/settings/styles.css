@@ -20,7 +20,7 @@ input {
 
 .page {
   box-sizing: border-box;
-  min-height: 100vh;
+  min-height: calc(100vh - env(titlebar-area-height, 46px));
   padding: 24px;
 }
 
@@ -270,7 +270,9 @@ button.danger:hover {
 }
 
 .titlebar {
-  height: 46px;
+  box-sizing: border-box;
+  height: env(titlebar-area-height, 46px);
+  padding-right: max(0px, calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%)));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -282,9 +284,3 @@ button.danger:hover {
 .titlebar-brand { display: flex; align-items: center; gap: 10px; padding-left: 16px; font-size: 13px; font-weight: 650; color: #243954; }
 .titlebar-brand img { width: 24px; height: 24px; }
 .titlebar-section { color: #8794a5; font-weight: 400; border-left: 1px solid #dce3ec; padding-left: 10px; }
-.window-controls { display: flex; align-self: stretch; -webkit-app-region: no-drag; }
-button.window-control { display: grid; place-items: center; width: 46px; height: 100%; padding: 0; border-radius: 0; background: transparent; color: #40516a; }
-button.window-control:hover { background: #edf2f8; }
-button.window-close:hover { background: #e34c4c; color: white; }
-.window-control svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.2; }
-button.window-control:focus-visible { outline: 2px solid #1f6feb; outline-offset: -3px; }
