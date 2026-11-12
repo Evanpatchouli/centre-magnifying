@@ -51,5 +51,10 @@
     "win": {
       "target": "nsis"
     }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.21.5": true,
+    "uiohook-napi@1.5.5": true
   }
 }
