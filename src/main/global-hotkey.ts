@@ -1,6 +1,8 @@
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import type { UiohookKeyboardEvent, UiohookMouseEvent } from 'uiohook-napi'
-import { getMagnifierWindow, createMagnifierWindow } from './windows'
+import { getMagnifierWindow, createMagnifierWindow, showSettingsWindow } from './windows'
+import { toggleNativeCaptureVisibility } from './native-capture'
+import { getSettings } from './store'
 
 /* ── Build reverse keycode → name map once ─────────────────────── */
 
@@ -161,6 +163,11 @@ function handleMouseDown(e: UiohookMouseEvent): void {
 /* ── Default toggle implementation (used if no custom cb set) ──── */
 
 export function toggleMagnifierVisibility(): void {
+  if (toggleNativeCaptureVisibility()) return
+  if (getSettings().renderMode === 'native-wgc') {
+    showSettingsWindow()
+    return
+  }
   const mw = getMagnifierWindow()
   if (!mw || mw.isDestroyed()) {
     createMagnifierWindow()

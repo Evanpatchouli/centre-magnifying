@@ -23,6 +23,7 @@ export function MagnifierApp(): JSX.Element {
   const lastRenderedVideoTimeRef = useRef(-1)
   const webglRef = useRef<WebGLRenderer | null>(null)
   const renderLoopTokenRef = useRef(0)
+  const captureTokenRef = useRef(0)
   /** Prev settings snapshot used to decide light vs full restart. */
   const prevSettingsRef = useRef<MagnifierSettings | null>(null)
 
@@ -32,17 +33,20 @@ export function MagnifierApp(): JSX.Element {
 
   useEffect(() => {
     let disposed = false
+    let settingsChanged = false
 
     Promise.all([window.api.getSettings(), window.api.getRenderModeFeatures()]).then(([loadedSettings, features]) => {
       if (disposed) return
       featuresRef.current = features
       logWebGLProbe('features-loaded', features)
+      if (settingsChanged) return
       setSettings(loadedSettings)
       settingsRef.current = loadedSettings
       void fullRestart(loadedSettings)
     })
 
     const off = window.api.onSettingsChanged((nextSettings) => {
+      settingsChanged = true
       setSettings(nextSettings)
       settingsRef.current = nextSettings
       void reconcileCapture(nextSettings)
@@ -60,8 +64,15 @@ export function MagnifierApp(): JSX.Element {
   /** Full restart: stop everything, create new video + stream, re-enter loop. */
   async function fullRestart(nextSettings: MagnifierSettings): Promise<void> {
     stopAll()
+    const token = captureTokenRef.current
     resetRenderTracking()
     setWebglFallbackToCanvas(false)
+
+    if (nextSettings.renderMode === 'native-wgc') {
+      prevSettingsRef.current = nextSettings
+      setStatus('')
+      return
+    }
 
     if (!nextSettings.sourceId) {
       setStatus('请选择一个目标窗口')
@@ -87,9 +98,18 @@ export function MagnifierApp(): JSX.Element {
         } as MediaTrackConstraints,
       })
 
+      if (captureTokenRef.current !== token) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
+
       streamRef.current = stream
       video.srcObject = stream
       await video.play()
+      if (captureTokenRef.current !== token) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
       logWebGLProbe('capture-started', {
         sourceId: nextSettings.sourceId,
         renderMode: nextSettings.renderMode,
@@ -107,6 +127,8 @@ export function MagnifierApp(): JSX.Element {
       prevSettingsRef.current = nextSettings
       enterRenderLoop(nextSettings)
     } catch (error) {
+      if (captureTokenRef.current !== token) return
+      stopAll()
       console.error(error)
       setStatus('无法捕获目标窗口。请确认目标窗口仍然打开，并在设置中重新选择。')
     }
@@ -114,9 +136,8 @@ export function MagnifierApp(): JSX.Element {
 
   /**
    * Decide whether a settings change requires a full capture restart vs. a
-   * lightweight renderer switch.  Only `sourceId` and `fps` affect the capture
-   * pipeline — `renderMode`, `radius`, `scale`, and `smoothing` only change how
-   * the already-captured frames are rendered.
+   * lightweight renderer switch. Source and FPS changes restart browser capture;
+   * switching to or from Native WGC also stops or starts the browser stream.
    */
   function reconcileCapture(nextSettings: MagnifierSettings): void {
     const prev = prevSettingsRef.current
@@ -124,7 +145,9 @@ export function MagnifierApp(): JSX.Element {
     const needsFullRestart =
       !prev ||
       prev.sourceId !== nextSettings.sourceId ||
-      prev.fps !== nextSettings.fps
+      prev.fps !== nextSettings.fps ||
+      prev.renderMode === 'native-wgc' ||
+      nextSettings.renderMode === 'native-wgc'
 
     prevSettingsRef.current = nextSettings
 
@@ -155,6 +178,7 @@ export function MagnifierApp(): JSX.Element {
   /* ── Teardown ───────────────────────────────────────────────── */
 
   function stopAll(): void {
+    captureTokenRef.current += 1
     stopRenderLoop()
     webglRef.current?.dispose()
     webglRef.current = null

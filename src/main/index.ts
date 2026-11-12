@@ -1,10 +1,12 @@
-import { app } from 'electron'
+import { app, dialog } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createTray } from './tray'
 import { createMagnifierWindow, showSettingsWindow } from './windows'
 import { registerIpcHandlers } from './ipc'
 import { getSettings } from './store'
 import { init as initHotkey, shutdown as shutdownHotkey, setHotkey } from './global-hotkey'
+import { restoreNativeCapture } from './magnifier-controller'
+import { stopNativeCapture } from './native-capture'
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.centre.magnifying')
@@ -19,9 +21,13 @@ app.whenReady().then(() => {
 
   createTray()
   createMagnifierWindow()
+  const captureError = restoreNativeCapture()
 
-  if (shouldOpenSettingsOnStart()) {
+  if (captureError || shouldOpenSettingsOnStart()) {
     showSettingsWindow()
+  }
+  if (captureError) {
+    void dialog.showMessageBox({ type: 'warning', message: captureError, detail: '已切换到 Canvas 2D，请在设置中重新选择窗口。' })
   }
 
   app.on('activate', () => {
@@ -34,6 +40,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  stopNativeCapture()
   shutdownHotkey()
 })
 

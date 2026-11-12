@@ -125,7 +125,9 @@ export function SettingsApp(): JSX.Element {
       setMessage("设置已应用。");
     } catch (error) {
       console.error(error);
-      setMessage("保存设置失败。");
+      setMessage(settings.renderMode === 'native-wgc'
+        ? "Native WGC 启动失败，请确认目标窗口仍然打开，且系统支持窗口捕获后重试。"
+        : "保存设置失败。");
     } finally {
       setSaving(false);
     }
@@ -337,7 +339,7 @@ export function SettingsApp(): JSX.Element {
               <option value="webgl" disabled={!renderModeFeatures.webgl}>{renderModeLabel('webgl')}</option>
               <option value="native-wgc" disabled={!renderModeFeatures.nativeWgc}>{renderModeLabel('native-wgc')}</option>
             </select>
-            <div className="hint">Native WGC 使用独立的原生捕获与渲染管线，需编译原生模块方可使用。</div>
+            <div className="hint">Native WGC 使用 Windows 原生窗口捕获与渲染；开发环境需先编译原生模块。</div>
           </div>
 
           {showRenderModeInfo ? (
@@ -380,7 +382,7 @@ export function SettingsApp(): JSX.Element {
                       <td>裁剪方式</td>
                       <td>Canvas 圆形裁剪</td>
                       <td>Canvas 中心裁剪 + 圆形遮罩</td>
-                      <td>Shader discard</td>
+                      <td>窗口区域圆形遮罩</td>
                     </tr>
                     <tr>
                       <td>数据路径</td>
@@ -404,14 +406,14 @@ export function SettingsApp(): JSX.Element {
                       <td>兼容性</td>
                       <td>全平台</td>
                       <td>需 WebGL 支持</td>
-                      <td>仅 Windows，需编译原生模块</td>
+                      <td>Windows 10 1903 或更新版本</td>
                     </tr>
                   </tbody>
                 </table>
                 <p className="modal-note">
                   Canvas 2D 和 WebGL 使用相同的 Desktop Capture 捕获管线，渲染方式不同。
                   WebGL 使用中间 Canvas 保持捕获兼容性，平滑放大时采用立方重建滤镜。
-                  Native WGC 使用独立的 D3D11 渲染管线，需要 Visual Studio Build Tools 编译原生模块。
+                  Native WGC 使用独立的 Windows 窗口捕获与 D3D11 渲染管线。
                   实际帧率与延迟需在目标设备和应用中测量。
                 </p>
                 <div className="modal-actions">

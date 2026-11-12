@@ -15,6 +15,7 @@ wgc::RenderParams ParseParams(const Napi::Object& obj) {
   wgc::RenderParams p;
   if (obj.Has("radius"))    p.radius    = obj.Get("radius").As<Napi::Number>().Int32Value();
   if (obj.Has("scale"))     p.scale     = obj.Get("scale").As<Napi::Number>().DoubleValue();
+  if (obj.Has("fps"))       p.fps       = obj.Get("fps").As<Napi::Number>().Int32Value();
   if (obj.Has("smoothing")) p.smoothing = obj.Get("smoothing").As<Napi::Boolean>().Value();
   return p;
 }
@@ -85,6 +86,25 @@ Napi::Value IsRunning(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(env, running);
 }
 
+Napi::Value IsSupported(const Napi::CallbackInfo& info) {
+  bool supported = false;
+  try { supported = wgc::wgcap::GraphicsCaptureSession::IsSupported(); }
+  catch (...) { }
+  return Napi::Boolean::New(info.Env(), supported);
+}
+
+Napi::Value SetVisible(const Napi::CallbackInfo& info) {
+  if (!g_manager || !g_manager->IsRunning() || info.Length() < 1 || !info[0].IsBoolean()) {
+    return Napi::Boolean::New(info.Env(), false);
+  }
+  g_manager->SetVisible(info[0].As<Napi::Boolean>().Value());
+  return Napi::Boolean::New(info.Env(), true);
+}
+
+Napi::Value IsVisible(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), g_manager && g_manager->IsRunning() && g_manager->IsVisible());
+}
+
 } // anonymous namespace
 
 /* ── Module init ──────────────────────────────────────────────── */
@@ -94,6 +114,9 @@ Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
   exports.Set("update",    Napi::Function::New(env, Update));
   exports.Set("stop",      Napi::Function::New(env, Stop));
   exports.Set("isRunning", Napi::Function::New(env, IsRunning));
+  exports.Set("isSupported", Napi::Function::New(env, IsSupported));
+  exports.Set("setVisible", Napi::Function::New(env, SetVisible));
+  exports.Set("isVisible", Napi::Function::New(env, IsVisible));
   return exports;
 }
 

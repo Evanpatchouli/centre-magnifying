@@ -11,9 +11,10 @@
     "build": "electron-vite build",
     "build:addon": "node scripts/build-addon.mjs",
     "build:addon:clean": "cd native/capture-addon && node-gyp clean",
+    "test:native-wgc": "node scripts/test-native-wgc.cjs",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "dist": "electron-builder"
+    "dist": "node scripts/prepare-native.mjs && electron-builder"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -41,6 +42,7 @@
   "build": {
     "appId": "com.centre.magnifying",
     "productName": "Centre Magnifying",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
@@ -50,7 +52,13 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "resources/icon.ico"
+      "icon": "resources/icon.ico",
+      "extraResources": [
+        {
+          "from": "native/capture-addon/build/Release/native_capture.node",
+          "to": "native/native_capture.node"
+        }
+      ]
     },
     "extraResources": [
       {

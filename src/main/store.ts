@@ -22,7 +22,7 @@ export function saveSettings(settings: MagnifierSettings): MagnifierSettings {
   return normalized
 }
 
-function normalizeSettings(settings: MagnifierSettings): MagnifierSettings {
+export function normalizeSettings(settings: MagnifierSettings): MagnifierSettings {
   const normalized: MagnifierSettings = {
     sourceId: settings.sourceId ?? null,
     sourceName: settings.sourceName ?? null,
