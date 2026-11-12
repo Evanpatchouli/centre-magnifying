@@ -16,13 +16,12 @@ export function MagnifierApp(): JSX.Element {
   const webglCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const animationRef = useRef<number | null>(null)
+  const videoFrameRef = useRef<number | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const settingsRef = useRef<MagnifierSettings>(DEFAULT_SETTINGS)
   const featuresRef = useRef<RenderModeFeatures>(DEFAULT_RENDER_MODE_FEATURES)
-  const lastRenderAtRef = useRef(0)
   const lastRenderedVideoTimeRef = useRef(-1)
   const webglRef = useRef<WebGLRenderer | null>(null)
-  const lastWebGLFrameAtRef = useRef(0)
   const renderLoopTokenRef = useRef(0)
   /** Prev settings snapshot used to decide light vs full restart. */
   const prevSettingsRef = useRef<MagnifierSettings | null>(null)
@@ -174,10 +173,13 @@ export function MagnifierApp(): JSX.Element {
       cancelAnimationFrame(animationRef.current)
       animationRef.current = null
     }
+    if (videoFrameRef.current !== null && videoRef.current) {
+      videoRef.current.cancelVideoFrameCallback?.(videoFrameRef.current)
+      videoFrameRef.current = null
+    }
   }
 
   function resetRenderTracking(): void {
-    lastRenderAtRef.current = 0
     lastRenderedVideoTimeRef.current = -1
   }
 
@@ -197,23 +199,7 @@ export function MagnifierApp(): JSX.Element {
   }
 
   function startCanvasLoop(): void {
-    const token = renderLoopTokenRef.current
-
-    const loop = (now: number): void => {
-      if (renderLoopTokenRef.current !== token) return
-
-      const settings = settingsRef.current
-      const minFrameDuration = 1000 / settings.fps
-
-      if (now - lastRenderAtRef.current >= minFrameDuration) {
-        lastRenderAtRef.current = now
-        renderFrame(settings)
-      }
-
-      animationRef.current = requestAnimationFrame(loop)
-    }
-
-    animationRef.current = requestAnimationFrame(loop)
+    startVideoLoop((newVideoFrame) => renderFrame(settingsRef.current, newVideoFrame))
   }
 
   /* ── WebGL path ─────────────────────────────────────────────── */
@@ -235,34 +221,54 @@ export function MagnifierApp(): JSX.Element {
       }
     }
 
+    startVideoLoop(() => {
+      if (!webglRef.current?.isLost) webglRef.current?.render(video, settingsRef.current)
+    })
+  }
+
+  /** Draw each available video frame; capture itself is constrained to the selected fps. */
+  function startVideoLoop(render: (newVideoFrame: boolean) => void): void {
+    const video = videoRef.current
+    if (!video) return
     const token = renderLoopTokenRef.current
 
-    const loop = (now: number): void => {
-      if (renderLoopTokenRef.current !== token) return
-
-      if (webglRef.current?.isLost) {
-        animationRef.current = requestAnimationFrame(loop)
-        return
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      const onVideoFrame = (): void => {
+        if (renderLoopTokenRef.current !== token) return
+        render(true)
+        videoFrameRef.current = video.requestVideoFrameCallback(onVideoFrame)
       }
-
-      const currentSettings = settingsRef.current
-      const minFrameDuration = 1000 / currentSettings.fps
-
-      if (now - lastWebGLFrameAtRef.current >= minFrameDuration) {
-        lastWebGLFrameAtRef.current = now
-        webglRef.current?.render(video, currentSettings)
-      }
-
-      animationRef.current = requestAnimationFrame(loop)
+      // Paint the current frame after a renderer or setting change even if the
+      // capture source is static and does not deliver another frame immediately.
+      animationRef.current = requestAnimationFrame(() => {
+        if (renderLoopTokenRef.current !== token) return
+        animationRef.current = null
+        render(false)
+        videoFrameRef.current = video.requestVideoFrameCallback(onVideoFrame)
+      })
+      return
     }
 
-    lastWebGLFrameAtRef.current = 0
-    animationRef.current = requestAnimationFrame(loop)
+    // Older Chromium: retain fractional frame intervals instead of resetting the
+    // deadline after every draw, which could halve the effective frame rate.
+    let nextFrameAt = 0
+    const onAnimationFrame = (now: number): void => {
+      if (renderLoopTokenRef.current !== token) return
+      const interval = 1000 / settingsRef.current.fps
+      if (nextFrameAt === 0 || now + 0.25 >= nextFrameAt) {
+        render(false)
+        nextFrameAt = nextFrameAt === 0 || now - nextFrameAt > interval
+          ? now + interval
+          : nextFrameAt + interval
+      }
+      animationRef.current = requestAnimationFrame(onAnimationFrame)
+    }
+    animationRef.current = requestAnimationFrame(onAnimationFrame)
   }
 
   /* ── Canvas 2D path ─────────────────────────────────────────── */
 
-  function renderFrame(currentSettings: MagnifierSettings): void {
+  function renderFrame(currentSettings: MagnifierSettings, newVideoFrame: boolean): void {
     const canvas = canvas2dRef.current
     const video = videoRef.current
     if (!canvas || !video || video.videoWidth <= 0 || video.videoHeight <= 0) return
@@ -273,7 +279,7 @@ export function MagnifierApp(): JSX.Element {
     const outputSize = Math.round(sourceSize * scale)
     const resized = resizeCanvasIfNeeded(canvas, outputSize)
 
-    if (!resized && video.currentTime === lastRenderedVideoTimeRef.current) return
+    if (!newVideoFrame && !resized && video.currentTime === lastRenderedVideoTimeRef.current) return
     lastRenderedVideoTimeRef.current = video.currentTime
 
     const context = canvas.getContext('2d')

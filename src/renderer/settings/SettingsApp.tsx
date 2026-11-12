@@ -159,13 +159,13 @@ export function SettingsApp(): JSX.Element {
     if (renderMode === 'canvas2d') return 'Canvas 2D（兼容模式）';
     if (renderMode === 'webgl') {
       return renderModeFeatures.webgl
-        ? 'WebGL（高性能模式）'
-        : 'WebGL（高性能模式，存在缺陷，暂不开放）';
+        ? 'WebGL（实验模式）'
+        : 'WebGL（实验模式，暂不开放）';
     }
 
     return renderModeFeatures.nativeWgc
-      ? 'Native WGC（极低延迟）'
-      : 'Native WGC（极低延迟，存在缺陷，暂不开放）';
+      ? 'Native WGC（实验模式）'
+      : 'Native WGC（实验模式，暂不开放）';
   }
 
   function formatHotkey(accelerator: string | null): string {
@@ -337,7 +337,7 @@ export function SettingsApp(): JSX.Element {
               <option value="webgl" disabled={!renderModeFeatures.webgl}>{renderModeLabel('webgl')}</option>
               <option value="native-wgc" disabled={!renderModeFeatures.nativeWgc}>{renderModeLabel('native-wgc')}</option>
             </select>
-            <div className="hint">Native WGC 完全绕过 Chromium 渲染管线，延迟最低。需编译原生模块方可使用。</div>
+            <div className="hint">Native WGC 使用独立的原生捕获与渲染管线，需编译原生模块方可使用。</div>
           </div>
 
           {showRenderModeInfo ? (
@@ -366,8 +366,8 @@ export function SettingsApp(): JSX.Element {
                   <tbody>
                     <tr>
                       <td>渲染引擎</td>
-                      <td>CPU Skia</td>
-                      <td>GPU OpenGL ES</td>
+                      <td>浏览器 Canvas 2D</td>
+                      <td>WebGL 纹理与着色器</td>
                       <td>GPU D3D11 + HLSL</td>
                     </tr>
                     <tr>
@@ -378,27 +378,27 @@ export function SettingsApp(): JSX.Element {
                     </tr>
                     <tr>
                       <td>裁剪方式</td>
-                      <td>CPU arc + clip</td>
-                      <td>Shader discard</td>
+                      <td>Canvas 圆形裁剪</td>
+                      <td>Canvas 中心裁剪 + 圆形遮罩</td>
                       <td>Shader discard</td>
                     </tr>
                     <tr>
                       <td>数据路径</td>
-                      <td>GPU→CPU→GPU 搬运</td>
-                      <td>GPU 内全流程</td>
+                      <td>视频绘制到 Canvas</td>
+                      <td>中间 Canvas → WebGL 纹理</td>
                       <td>GPU 内全流程，无 Chromium 层</td>
                     </tr>
                     <tr>
                       <td>帧同步</td>
-                      <td>RAF 定时器</td>
-                      <td>requestVideoFrameCallback</td>
+                      <td>视频帧回调，或 RAF 回退</td>
+                      <td>视频帧回调，或 RAF 回退</td>
                       <td>WGC FrameArrived 原生回调</td>
                     </tr>
                     <tr>
                       <td>延迟</td>
-                      <td>基线</td>
-                      <td>约 -1~4ms</td>
-                      <td>约 -16~50ms（绕过 Chromium）</td>
+                      <td>取决于设备和捕获源</td>
+                      <td>取决于设备和捕获源</td>
+                      <td>取决于设备和捕获源</td>
                     </tr>
                     <tr>
                       <td>兼容性</td>
@@ -409,9 +409,10 @@ export function SettingsApp(): JSX.Element {
                   </tbody>
                 </table>
                 <p className="modal-note">
-                  Canvas 2D 和 WebGL 使用相同的 Desktop Capture 捕获管线，仅渲染方式不同。
-                  Native WGC 完全绕过 Chromium 栈，直接在 D3D11 中完成捕获→渲染→输出，
-                  延迟降低一整个量级，但需要 Visual Studio Build Tools 编译原生模块。
+                  Canvas 2D 和 WebGL 使用相同的 Desktop Capture 捕获管线，渲染方式不同。
+                  WebGL 使用中间 Canvas 保持捕获兼容性，平滑放大时采用立方重建滤镜。
+                  Native WGC 使用独立的 D3D11 渲染管线，需要 Visual Studio Build Tools 编译原生模块。
+                  实际帧率与延迟需在目标设备和应用中测量。
                 </p>
                 <div className="modal-actions">
                   <button type="button" onClick={() => setShowRenderModeInfo(false)}>

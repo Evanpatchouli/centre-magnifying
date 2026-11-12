@@ -12,18 +12,58 @@ void main() {
 `
 
 const FRAGMENT_SHADER_SOURCE = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 varying vec2 v_texCoord;
 uniform sampler2D u_video;
-uniform vec2 u_texScale;
-  uniform vec2 u_texOffset;
+uniform vec2 u_textureSize;
+uniform bool u_smoothing;
 
-  void main() {
-  // Flip Y – video frames are top-left origin, GL textures are bottom-left.
-  vec2 flipped = vec2(v_texCoord.x, 1.0 - v_texCoord.y);
-  vec2 videoUV = u_texOffset + flipped * u_texScale;
-  vec4 color = texture2D(u_video, videoUV);
-  gl_FragColor = vec4(color.rgb, 1.0);
+// Catmull-Rom cubic reconstruction (B = 0, C = 1/2). Group the two
+// positive central weights into a linear texture lookup, leaving three
+// lookups per axis instead of four.
+float cubicWeight(float distance) {
+  float x = abs(distance);
+  if (x < 1.0) return ((9.0 * x - 15.0) * x * x + 6.0) / 6.0;
+  if (x < 2.0) return (((-3.0 * x + 15.0) * x - 24.0) * x + 12.0) / 6.0;
+  return 0.0;
+}
+
+void cubicAxis(float uv, float size, out vec3 positions, out vec3 weights) {
+  float pixel = uv * size - 0.5;
+  float base = floor(pixel);
+  float f = pixel - base;
+  float w0 = cubicWeight(1.0 + f);
+  float w1 = cubicWeight(f);
+  float w2 = cubicWeight(1.0 - f);
+  float w3 = cubicWeight(2.0 - f);
+  float middle = w1 + w2;
+  positions = (base + vec3(-0.5, 0.5 + w2 / middle, 2.5)) / size;
+  weights = vec3(w0, middle, w3);
+}
+
+void main() {
+  vec2 uv = vec2(v_texCoord.x, 1.0 - v_texCoord.y);
+  if (!u_smoothing) {
+    gl_FragColor = vec4(texture2D(u_video, uv).rgb, 1.0);
+    return;
+  }
+  vec3 xs; vec3 xw; vec3 ys; vec3 yw;
+  cubicAxis(uv.x, u_textureSize.x, xs, xw);
+  cubicAxis(uv.y, u_textureSize.y, ys, yw);
+  vec3 row0 = texture2D(u_video, vec2(xs.x, ys.x)).rgb * xw.x
+            + texture2D(u_video, vec2(xs.y, ys.x)).rgb * xw.y
+            + texture2D(u_video, vec2(xs.z, ys.x)).rgb * xw.z;
+  vec3 row1 = texture2D(u_video, vec2(xs.x, ys.y)).rgb * xw.x
+            + texture2D(u_video, vec2(xs.y, ys.y)).rgb * xw.y
+            + texture2D(u_video, vec2(xs.z, ys.y)).rgb * xw.z;
+  vec3 row2 = texture2D(u_video, vec2(xs.x, ys.z)).rgb * xw.x
+            + texture2D(u_video, vec2(xs.y, ys.z)).rgb * xw.y
+            + texture2D(u_video, vec2(xs.z, ys.z)).rgb * xw.z;
+  gl_FragColor = vec4(row0 * yw.x + row1 * yw.y + row2 * yw.z, 1.0);
 }
 `
 
@@ -58,8 +98,8 @@ interface GLResources {
   program: WebGLProgram
   vertexBuffer: WebGLBuffer
   videoTexture: WebGLTexture
-  uTexScale: WebGLUniformLocation
-  uTexOffset: WebGLUniformLocation
+  uTextureSize: WebGLUniformLocation
+  uSmoothing: WebGLUniformLocation
 }
 
 export function createWebGLRenderer(
@@ -88,6 +128,8 @@ export function createWebGLRenderer(
   let disposed = false
   let renderCount = 0
   let lastProbeAt = 0
+  let currentFilter: number | null = null
+  let currentTextureSize = 0
 
   logProbe(options, 'created', {
     renderer: gl.getParameter(gl.RENDERER),
@@ -103,6 +145,8 @@ export function createWebGLRenderer(
     gl!.deleteTexture(r.videoTexture)
     gl!.deleteProgram(r.program)
     gl!.deleteBuffer(r.vertexBuffer)
+    canvas.removeEventListener('webglcontextlost', onContextLost)
+    canvas.removeEventListener('webglcontextrestored', onContextRestored)
   }
 
   const renderer: WebGLRenderer = {
@@ -131,10 +175,7 @@ export function createWebGLRenderer(
         gl.viewport(0, 0, outputSize, outputSize)
       }
 
-      gl.clearColor(0, 0, 0, 1)
-      gl.clear(gl.COLOR_BUFFER_BIT)
-
-      // Compute UV scale/offset for source region (video centre crop)
+      // Crop the video into a small intermediate canvas for capture compatibility.
       const sourceSize = settings.radius * 2
       const safe = Math.round(Math.min(sourceSize, video.videoWidth, video.videoHeight))
       const sx = Math.max(0, Math.round(video.videoWidth / 2 - safe / 2))
@@ -156,19 +197,24 @@ export function createWebGLRenderer(
       // when the HTMLVideoElement is sampled as a WebGL texture.
       gl.bindTexture(gl.TEXTURE_2D, resources!.videoTexture)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, uploadCanvas)
-      const uploadError = gl.getError()
+      const uploadError = shouldProbeFrame ? gl.getError() : null
 
       // Set texture filtering from smooth setting
       const filter = settings.smoothing ? gl.LINEAR : gl.NEAREST
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter)
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter)
+      if (filter !== currentFilter) {
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter)
+        gl.uniform1i(resources!.uSmoothing, settings.smoothing ? 1 : 0)
+        currentFilter = filter
+      }
+      if (safe !== currentTextureSize) {
+        gl.uniform2f(resources!.uTextureSize, safe, safe)
+        currentTextureSize = safe
+      }
 
-      gl.uniform2f(resources!.uTexScale, 1, 1)
-      gl.uniform2f(resources!.uTexOffset, 0, 0)
-
-      // Draw full-screen quad – fragment shader handles circular mask
+      // The canvas's CSS border radius provides the circular mask.
       gl.drawArrays(gl.TRIANGLES, 0, 6)
-      const drawError = gl.getError()
+      const drawError = shouldProbeFrame ? gl.getError() : null
 
       if (shouldProbeFrame) {
         const framebufferPixel = new Uint8Array(4)
@@ -196,18 +242,25 @@ export function createWebGLRenderer(
     dispose,
   }
 
-  canvas.addEventListener('webglcontextlost', (event: Event) => {
+  function onContextLost(event: Event): void {
     event.preventDefault()
     renderer.isLost = true
-  })
+  }
 
-  canvas.addEventListener('webglcontextrestored', () => {
-    const rebuilt = buildResources(gl)
+  function onContextRestored(): void {
+    if (disposed) return
+    const rebuilt = buildResources(gl!)
     if (rebuilt) {
       resources = rebuilt
+      currentFilter = null
+      currentTextureSize = 0
+      gl!.viewport(0, 0, canvas.width, canvas.height)
       renderer.isLost = false
     }
-  })
+  }
+
+  canvas.addEventListener('webglcontextlost', onContextLost)
+  canvas.addEventListener('webglcontextrestored', onContextRestored)
 
   return renderer
 }
@@ -296,11 +349,10 @@ function buildResources(gl: WebGLRenderingContext): GLResources | null {
   const videoLoc = gl.getUniformLocation(program, 'u_video')
   if (videoLoc) gl.uniform1i(videoLoc, 0)
 
-  // Cache uniform locations so render() doesn't call getUniformLocation per frame
-  const uTexScale = gl.getUniformLocation(program, 'u_texScale')!
-  const uTexOffset = gl.getUniformLocation(program, 'u_texOffset')!
+  const uTextureSize = gl.getUniformLocation(program, 'u_textureSize')!
+  const uSmoothing = gl.getUniformLocation(program, 'u_smoothing')!
 
-  return { program, vertexBuffer, videoTexture, uTexScale, uTexOffset }
+  return { program, vertexBuffer, videoTexture, uTextureSize, uSmoothing }
 }
 
 function compileProgram(
