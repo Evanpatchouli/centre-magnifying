@@ -8,7 +8,7 @@ const require = createRequire(import.meta.url)
 /* ── Addon interface ───────────────────────────────────────── */
 
 interface NativeCaptureAddon {
-  start(hwnd: number, params: NativeParams): boolean
+  start(hwnd: number, params: NativeParams, visible?: boolean): boolean
   update(params: NativeParams): boolean
   stop(): boolean
   isRunning(): boolean
@@ -56,6 +56,7 @@ function loadAddon(): NativeCaptureAddon | null {
 export interface NativeCaptureOptions {
   hwnd: number
   settings: MagnifierSettings
+  visible: boolean
 }
 
 /**
@@ -68,7 +69,7 @@ export function startNativeCapture(opts: NativeCaptureOptions): boolean {
 
   try {
     if (m.isRunning()) m.stop()
-    return m.start(opts.hwnd, toNativeParams(opts.settings))
+    return m.start(opts.hwnd, toNativeParams(opts.settings), opts.visible)
   } catch (error) {
     console.error('[native-capture] 启动失败。', error)
     return false
@@ -106,18 +107,8 @@ export function isNativeCaptureAvailable(): boolean {
   }
 }
 
-export function toggleNativeCaptureVisibility(): boolean {
-  if (!addon?.isRunning()) return false
-  addon.setVisible(!addon.isVisible())
-  return true
-}
-
-export function isNativeCaptureVisible(): boolean {
-  return Boolean(addon?.isRunning() && addon.isVisible())
-}
-
-export function setNativeCaptureVisible(visible: boolean): void {
-  if (addon?.isRunning()) addon.setVisible(visible)
+export function setNativeCaptureVisible(visible: boolean): boolean {
+  return Boolean(addon?.isRunning() && addon.setVisible(visible))
 }
 
 function toNativeParams(settings: MagnifierSettings): NativeParams {

@@ -1,8 +1,8 @@
 import { uIOhook, UiohookKey } from 'uiohook-napi'
 import type { UiohookKeyboardEvent, UiohookMouseEvent } from 'uiohook-napi'
-import { getMagnifierWindow, createMagnifierWindow, showSettingsWindow } from './windows'
-import { toggleNativeCaptureVisibility } from './native-capture'
-import { getSettings } from './store'
+import { dialog } from 'electron'
+import { setMagnifierVisibility } from './magnifier-controller'
+import { isMagnifierVisible } from './magnifier-visibility'
 
 /* ── Build reverse keycode → name map once ─────────────────────── */
 
@@ -162,24 +162,11 @@ function handleMouseDown(e: UiohookMouseEvent): void {
   }
 }
 
-/* ── Default toggle implementation (used if no custom cb set) ──── */
-
 export function toggleMagnifierVisibility(): void {
-  if (toggleNativeCaptureVisibility()) return
-  if (getSettings().renderMode === 'native-wgc') {
-    showSettingsWindow()
-    return
-  }
-  const mw = getMagnifierWindow()
-  if (!mw || mw.isDestroyed()) {
-    createMagnifierWindow()
-    return
-  }
-
-  if (mw.isVisible()) {
-    mw.hide()
-  } else {
-    mw.showInactive()
-    mw.setIgnoreMouseEvents(true, { forward: true })
+  try {
+    setMagnifierVisibility(!isMagnifierVisible())
+  } catch (error) {
+    console.error('[magnifier] 切换显示状态失败。', error)
+    void dialog.showMessageBox({ type: 'warning', message: '无法显示放大镜', detail: '请检查目标窗口是否仍然打开，并在设置中重试。' })
   }
 }

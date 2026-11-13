@@ -66,6 +66,11 @@ if (!process.versions.electron) {
     target.show()
     await delay(1000)
     const hwnd = Number(target.getNativeWindowHandle().readBigUInt64LE())
+    assert.ok(addon.start(hwnd, { radius: 80, scale: 2, fps: 60, smoothing: false }, false))
+    assert.equal(addon.isVisible(), false, 'Capture should start hidden when requested')
+    assert.ok(addon.setVisible(true))
+    await expectColors('隐藏启动后显示', 60, [{ r: 255, g: 0, b: 0 }, { r: 0, g: 0, b: 255 }])
+    assert.ok(addon.stop())
     assert.ok(addon.start(hwnd, { radius: 80, scale: 2, fps: 60, smoothing: false }))
     await expectColors('完整画面和上下方向', 60, [{ r: 255, g: 0, b: 0 }, { r: 0, g: 0, b: 255 }])
 

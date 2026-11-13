@@ -1,6 +1,6 @@
 {
   "name": "centre-magnifying",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Electron + React window-centre magnifier",
   "main": "out/main/index.js",
   "private": true,
@@ -12,6 +12,7 @@
     "build:addon": "node scripts/build-addon.mjs",
     "build:addon:clean": "cd native/capture-addon && node-gyp clean",
     "test:native-wgc": "node scripts/test-native-wgc.cjs",
+    "test:visibility": "node scripts/test-magnifier-visibility.cjs",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "dist": "node scripts/prepare-native.mjs && electron-builder"

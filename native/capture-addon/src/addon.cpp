@@ -20,7 +20,7 @@ wgc::RenderParams ParseParams(const Napi::Object& obj) {
   return p;
 }
 
-/* ── start(hwnd: number, params: object) ─────────────────────── */
+/* ── start(hwnd: number, params: object, visible?: boolean) ──── */
 
 Napi::Value Start(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -34,6 +34,7 @@ Napi::Value Start(const Napi::CallbackInfo& info) {
   int64_t hwndNum = info[0].As<Napi::Number>().Int64Value();
   HWND targetHwnd = reinterpret_cast<HWND>(static_cast<INT_PTR>(hwndNum));
   auto params = ParseParams(info[1].As<Napi::Object>());
+  bool visible = info.Length() < 3 || !info[2].IsBoolean() || info[2].As<Napi::Boolean>().Value();
 
   if (g_manager) {
     g_manager->Stop();
@@ -41,7 +42,7 @@ Napi::Value Start(const Napi::CallbackInfo& info) {
   }
 
   g_manager = std::make_unique<wgc::CaptureManager>();
-  bool ok = g_manager->Start(targetHwnd, params);
+  bool ok = g_manager->Start(targetHwnd, params, visible);
   return Napi::Boolean::New(env, ok);
 }
 

@@ -1316,6 +1316,11 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   box-shadow: 0 2px 6px rgba(80, 96, 120, 0.07), inset 0 1px 0 #fff;
 }
 
+.visibility-control {
+  margin-top: 18px;
+  padding: 12px 10px;
+}
+
 .toggle-copy {
   display: grid;
   gap: 2px;

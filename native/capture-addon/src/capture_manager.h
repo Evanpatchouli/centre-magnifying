@@ -63,7 +63,7 @@ public:
   CaptureManager(const CaptureManager&) = delete;
   CaptureManager& operator=(const CaptureManager&) = delete;
 
-  bool Start(HWND targetHwnd, const RenderParams& params);
+  bool Start(HWND targetHwnd, const RenderParams& params, bool visible = true);
   void Update(const RenderParams& params);
   void Stop();
   void SetVisible(bool visible);

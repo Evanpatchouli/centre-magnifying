@@ -121,13 +121,13 @@ CaptureManager::~CaptureManager() { Stop(); }
 
 /* ── Start / Stop / Update ──────────────────────────────────── */
 
-bool CaptureManager::Start(HWND targetHwnd, const RenderParams& params) {
+bool CaptureManager::Start(HWND targetHwnd, const RenderParams& params, bool visible) {
   if (m_running.load()) return false;
   { std::lock_guard<std::mutex> lk(m_paramsMutex); m_params = params; }
   m_renderCount.store(0);
   m_settingsVersion.store(1);
   m_lastRenderedFrame = m_lastRenderedSettings = 0;
-  m_visible.store(true);
+  m_visible.store(visible);
 
   m_targetHwnd = targetHwnd;
   if (!IsWindow(targetHwnd)) {
@@ -246,7 +246,7 @@ bool CaptureManager::CreateOverlayWindow() {
 
   if (!SetLayeredWindowAttributes(m_overlayHwnd, 0, 255, LWA_ALPHA)) return false;
   UpdateOverlayBounds(m_outputSize);
-  ShowWindow(m_overlayHwnd, SW_SHOWNOACTIVATE);
+  if (m_visible.load()) ShowWindow(m_overlayHwnd, SW_SHOWNOACTIVATE);
   UpdateWindow(m_overlayHwnd);
   Probe("overlay ok");
   return true;

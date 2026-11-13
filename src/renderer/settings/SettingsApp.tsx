@@ -242,6 +242,8 @@ function SliderField(props: {
 }
 
 export function SettingsApp(): JSX.Element {
+  const [magnifierVisible, setMagnifierVisible] = useState<boolean | null>(null);
+  const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [settings, setSettings] = useState<MagnifierSettings>(DEFAULT_SETTINGS);
   const [savedSettings, setSavedSettings] = useState<MagnifierSettings>(DEFAULT_SETTINGS);
   const [sources, setSources] = useState<CaptureSourceDTO[]>([]);
@@ -281,6 +283,20 @@ export function SettingsApp(): JSX.Element {
     }
 
     let disposed = false;
+    let visibilityChanged = false;
+    const offVisibility = api.onMagnifierVisibilityChanged((visible) => {
+      visibilityChanged = true;
+      setMagnifierVisible(visible);
+    });
+    void api.getMagnifierVisibility().then((visible) => {
+      if (!disposed && !visibilityChanged) setMagnifierVisible(visible);
+    }).catch((error) => {
+      console.error(error);
+      if (!disposed) {
+        setMessage("读取放大镜显示状态失败。");
+        setMessageTone("error");
+      }
+    });
     Promise.all([api.getSettings(), api.getRenderModeFeatures(), loadSources()])
       .then(([loadedSettings, features]) => {
         if (disposed) return;
@@ -304,6 +320,7 @@ export function SettingsApp(): JSX.Element {
     return () => {
       disposed = true;
       off();
+      offVisibility();
       if (escHandlerRef.current) {
         window.removeEventListener("keydown", escHandlerRef.current, true);
         escHandlerRef.current = null;
@@ -371,6 +388,23 @@ export function SettingsApp(): JSX.Element {
     setSettings((current) => ({ ...current, ...patch }));
     setMessage("");
     setMessageTone("idle");
+  }
+
+  async function changeVisibility(visible: boolean): Promise<void> {
+    const api = getAppApi();
+    if (!api || updatingVisibility) return;
+    setUpdatingVisibility(true);
+    setMessage("");
+    setMessageTone("idle");
+    try {
+      await api.setMagnifierVisibility(visible);
+    } catch (error) {
+      console.error(error);
+      setMessage("切换放大镜显示状态失败，请确认目标窗口仍然打开后重试。");
+      setMessageTone("error");
+    } finally {
+      setUpdatingVisibility(false);
+    }
   }
 
   async function save(): Promise<void> {
@@ -1039,6 +1073,24 @@ export function SettingsApp(): JSX.Element {
             ))}
           </nav>
 
+          <div className="toggle-card visibility-control">
+            <div className="toggle-copy">
+              <strong>显示放大镜</strong>
+              <span>{magnifierVisible === null ? "读取状态中" : magnifierVisible ? "显示中 · 即时生效" : "已隐藏 · 即时生效"}</span>
+            </div>
+            <label className="switch">
+              <input
+                type="checkbox"
+                role="switch"
+                aria-label="显示放大镜"
+                checked={magnifierVisible === true}
+                onChange={(event) => void changeVisibility(event.target.checked)}
+                disabled={!apiAvailable || magnifierVisible === null || updatingVisibility}
+              />
+              <span className="switch-track"><span className="switch-knob" /></span>
+            </label>
+          </div>
+
           <div className="rail-preview">
             <div className="rail-preview-label">镜头预览</div>
             <div className="lens" aria-hidden="true">
@@ -1067,7 +1119,7 @@ export function SettingsApp(): JSX.Element {
             <div className="page-head-copy">
               <div className="eyebrow">Centre Magnifying</div>
               <h1>放大镜设置</h1>
-              <p>调校取景、倍率与渲染管线；更改在点击「应用设置」后生效。</p>
+              <p>调校取景、倍率与渲染管线；参数在点击「应用设置」后生效，显示开关即时生效。</p>
             </div>
             <div className={"sync-chip" + (dirty ? " is-dirty" : "") + (!apiAvailable ? " is-error" : "")}>
               <span className="sync-dot" />

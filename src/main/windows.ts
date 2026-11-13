@@ -4,6 +4,7 @@ import { is } from '@electron-toolkit/utils'
 import { getSettings } from './store'
 import type { MagnifierSettings } from './types'
 import { isNativeCaptureRunning } from './native-capture'
+import { isMagnifierVisible } from './magnifier-visibility'
 
 let magnifierWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
@@ -63,7 +64,7 @@ export function createMagnifierWindow(): BrowserWindow {
 
   magnifierWindow.once('ready-to-show', () => {
     updateMagnifierWindowBounds(getSettings())
-    if (!isNativeCaptureRunning()) magnifierWindow?.showInactive()
+    if (isMagnifierVisible() && !isNativeCaptureRunning()) magnifierWindow?.showInactive()
   })
 
   magnifierWindow.on('closed', () => {
