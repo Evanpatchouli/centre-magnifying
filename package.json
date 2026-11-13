@@ -1,6 +1,6 @@
 {
   "name": "centre-magnifying",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Electron + React window-centre magnifier",
   "main": "out/main/index.js",
   "private": true,

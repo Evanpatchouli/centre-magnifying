@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import appIcon from "../../../resources/icon.svg";
 import { DEFAULT_SETTINGS } from "../shared/defaults";
 import type { CaptureSourceDTO, MagnifierSettings, RenderModeFeatures } from "../shared/types";
@@ -237,6 +238,195 @@ function SliderField(props: {
         <span>{props.maxLabel}</span>
       </div>
       <p className="hint">{props.hint}</p>
+    </div>
+  );
+}
+
+type SourceOption = {
+  value: string;
+  label: string;
+  icon: string | null;
+  disabled?: boolean;
+};
+
+function SourceSelect({
+  sources,
+  value,
+  sourceName,
+  disabled,
+  onChange,
+}: {
+  sources: CaptureSourceDTO[];
+  value: string | null;
+  sourceName: string | null;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [activeValue, setActiveValue] = useState("");
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef({ text: "", time: 0 });
+  const options: SourceOption[] = [
+    { value: "", label: "选择目标窗口", icon: null },
+    ...sources.map((source) => ({ value: source.id, label: source.name, icon: source.appIcon })),
+  ];
+  if (value && !sources.some((source) => source.id === value)) {
+    options.push({ value, label: `${sourceName ?? "已关闭的窗口"}（已关闭）`, icon: null, disabled: true });
+  }
+  const selected = options.find((option) => option.value === (value ?? "")) ?? options[0];
+  const activeIndex = options.findIndex((option) => option.value === activeValue && !option.disabled);
+  const listId = "source-options";
+
+  function openMenu(): void {
+    setActiveValue(selected.disabled ? "" : selected.value);
+    setOpen(true);
+  }
+
+  function choose(option: SourceOption): void {
+    if (option.disabled) return;
+    onChange(option.value);
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>): void {
+    const enabled = options.filter((option) => !option.disabled);
+    if (event.key === "Tab") {
+      setOpen(false);
+      return;
+    }
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      return;
+    }
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      if (!open) {
+        openMenu();
+        return;
+      }
+      const index = enabled.findIndex((option) => option.value === activeValue);
+      const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 :
+        Math.max(0, Math.min(enabled.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)));
+      setActiveValue(enabled[nextIndex].value);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (!open) openMenu();
+      else if (activeIndex >= 0) choose(options[activeIndex]);
+      return;
+    }
+    if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const now = Date.now();
+      const query = (now - searchRef.current.time < 700 ? searchRef.current.text : "") + event.key.toLocaleLowerCase();
+      searchRef.current = { text: query, time: now };
+      const match = enabled.find((option) => option.label.toLocaleLowerCase().startsWith(query));
+      if (match) {
+        event.preventDefault();
+        setActiveValue(match.value);
+        setOpen(true);
+      }
+    }
+  }
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const updatePosition = (): void => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const gap = 7;
+      const edge = 12;
+      const desiredHeight = Math.min(280, options.length * 38 + 12);
+      const below = window.innerHeight - rect.bottom - gap - edge;
+      const above = rect.top - gap - edge;
+      const placeAbove = below < desiredHeight && above > below;
+      const available = Math.max(0, placeAbove ? above : below);
+      setMenuStyle({
+        left: rect.left,
+        width: rect.width,
+        maxHeight: Math.min(280, available),
+        ...(placeAbove ? { bottom: window.innerHeight - rect.top + gap } : { top: rect.bottom + gap }),
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, options.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: Event): void => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("focusin", closeOutside);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("focusin", closeOutside);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open && activeIndex >= 0) {
+      document.getElementById(`${listId}-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [open, activeIndex]);
+
+  return (
+    <div className="select-shell">
+      <button
+        ref={triggerRef}
+        id="source"
+        type="button"
+        className="select-trigger"
+        role="combobox"
+        aria-labelledby="source-label"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
+        aria-haspopup="listbox"
+        disabled={disabled}
+        onClick={() => open ? setOpen(false) : openMenu()}
+        onKeyDown={handleKeyDown}
+      >
+        <span className="select-value">{selected.label}</span>
+        <Icon name="chevron" size={16} className={"select-caret" + (open ? " is-open" : "")} />
+      </button>
+      {open ? createPortal(
+        <div ref={menuRef} id={listId} className="select-menu" role="listbox" aria-labelledby="source-label" style={menuStyle}>
+          {options.map((option, index) => (
+            <div
+              key={option.value}
+              id={`${listId}-${index}`}
+              role="option"
+              aria-selected={option.value === (value ?? "")}
+              aria-disabled={option.disabled || undefined}
+              className={"select-option" + (option.value === activeValue ? " is-active" : "") +
+                (option.value === (value ?? "") ? " is-selected" : "") + (option.disabled ? " is-disabled" : "")}
+              title={option.label}
+              onPointerMove={() => { if (!option.disabled) setActiveValue(option.value); }}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => choose(option)}
+            >
+              <span className="select-option-icon">
+                {option.icon ? <img src={option.icon} alt="" /> : <Icon name={option.value ? "window" : "lens"} size={14} />}
+              </span>
+              <span className="select-option-label">{option.label}</span>
+              {option.value === (value ?? "") ? <Icon name="check" size={15} className="select-option-check" /> : null}
+            </div>
+          ))}
+        </div>, document.body,
+      ) : null}
     </div>
   );
 }
@@ -536,7 +726,7 @@ export function SettingsApp(): JSX.Element {
             <div className="target-fields">
               <div className="field">
                 <div className="field-head">
-                  <label htmlFor="source">目标窗口</label>
+                  <label id="source-label" htmlFor="source">目标窗口</label>
                   <button
                     type="button"
                     className="mini-btn"
@@ -547,27 +737,13 @@ export function SettingsApp(): JSX.Element {
                     {loadingSources ? "读取中" : "刷新列表"}
                   </button>
                 </div>
-                <div className="select-shell">
-                  <select
-                    id="source"
-                    value={settings.sourceId ?? ""}
-                    onChange={(event) => onSourceChange(event.target.value)}
-                    disabled={!apiAvailable}
-                  >
-                    <option value="">选择目标窗口</option>
-                    {sources.map((source) => (
-                      <option key={source.id} value={source.id}>
-                        {source.name}
-                      </option>
-                    ))}
-                    {settings.sourceId && !selectedSourceExists ? (
-                      <option value={settings.sourceId} disabled>
-                        {settings.sourceName ?? "已关闭的窗口"}（已关闭）
-                      </option>
-                    ) : null}
-                  </select>
-                  <Icon name="chevron" size={16} className="select-caret" />
-                </div>
+                <SourceSelect
+                  sources={sources}
+                  value={settings.sourceId}
+                  sourceName={settings.sourceName}
+                  disabled={!apiAvailable}
+                  onChange={onSourceChange}
+                />
                 <p className="hint">目标应用需保持打开；窗口关闭后请刷新列表重新选择。</p>
               </div>
 
