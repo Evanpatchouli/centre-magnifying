@@ -354,7 +354,7 @@ export function MagnifierApp(): JSX.Element {
     : settings.renderMode
 
   return (
-    <div className="magnifier-root">
+    <div className={`magnifier-root${settings.smoothing ? ' magnifier-root--soft-edge' : ''}`}>
       <canvas
         ref={canvas2dRef}
         className={`magnifier-canvas${renderMode === 'canvas2d' ? '' : ' magnifier-canvas--hidden'}`}

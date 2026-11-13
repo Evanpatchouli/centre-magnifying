@@ -23,6 +23,23 @@ body {
   pointer-events: none;
 }
 
+.magnifier-root--soft-edge {
+  /* Keep the middle clear, then fade the outer rim into the desktop. */
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 80%, rgba(0, 0, 0, 0.84) 85%, rgba(0, 0, 0, 0.5) 90%, rgba(0, 0, 0, 0.16) 95%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 80%, rgba(0, 0, 0, 0.84) 85%, rgba(0, 0, 0, 0.5) 90%, rgba(0, 0, 0, 0.16) 95%, transparent 100%);
+}
+
+.magnifier-root--soft-edge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(clamp(2px, 0.6vw, 6px));
+  backdrop-filter: blur(clamp(2px, 0.6vw, 6px));
+  -webkit-mask-image: radial-gradient(circle closest-side, transparent 75%, #000 100%);
+  mask-image: radial-gradient(circle closest-side, transparent 75%, #000 100%);
+}
+
 .magnifier-canvas {
   display: block;
   width: 100%;

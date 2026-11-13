@@ -934,14 +934,14 @@ export function SettingsApp(): JSX.Element {
 
               <div className="toggle-card">
                 <div className="toggle-copy">
-                  <strong>图像平滑</strong>
-                  <span>插值柔化放大后的边缘</span>
+                  <strong>边缘柔化</strong>
+                  <span>边缘渐隐并虚化</span>
                 </div>
                 <label className="switch">
                   <input
                     type="checkbox"
                     role="switch"
-                    aria-label="图像平滑"
+                    aria-label="边缘柔化"
                     checked={settings.smoothing}
                     onChange={(event) => patchSettings({ smoothing: event.target.checked })}
                     disabled={!apiAvailable}
@@ -1404,9 +1404,9 @@ export function SettingsApp(): JSX.Element {
                 </tr>
                 <tr>
                   <td>裁剪方式</td>
-                  <td>Canvas 圆形裁剪</td>
                   <td>Canvas 中心裁剪 + 圆形遮罩</td>
-                  <td>窗口区域圆形遮罩</td>
+                  <td>Canvas 中心裁剪 + 圆形遮罩</td>
+                  <td>GPU 中心裁剪 + 圆形遮罩</td>
                 </tr>
                 <tr>
                   <td>数据路径</td>
@@ -1437,8 +1437,8 @@ export function SettingsApp(): JSX.Element {
 
             <p className="modal-note">
               Canvas 2D 和 WebGL 使用相同的 Desktop Capture 捕获管线，渲染方式不同。WebGL 使用中间 Canvas
-              保持捕获兼容性，平滑放大时采用立方重建滤镜。Native WGC 使用独立的 Windows 窗口捕获与 D3D11
-              渲染管线。实际帧率与延迟需在目标设备和应用中测量。
+              保持捕获兼容性，开启边缘柔化时采用立方重建滤镜。Native WGC 使用独立的 Windows 窗口捕获与 D3D11
+              渲染管线。三种模式均支持边缘渐变虚化。实际帧率与延迟需在目标设备和应用中测量。
             </p>
             <div className="modal-actions">
               <button type="button" className="btn btn--primary" onClick={() => setShowRenderModeInfo(false)}>

@@ -12,6 +12,7 @@
 #include <d3d11_4.h>
 #include <dxgi1_2.h>
 #include <d3dcompiler.h>
+#include <dcomp.h>
 
 // C++/WinRT for Windows.Graphics.Capture
 #include <winrt/base.h>
@@ -101,7 +102,10 @@ private:
   winrt::com_ptr<ID3D11Device> m_device;
   winrt::com_ptr<ID3D11DeviceContext> m_context;
   winrt::com_ptr<ID3D11Multithread> m_multithread;
-  winrt::com_ptr<IDXGISwapChain> m_swapChain;
+  winrt::com_ptr<IDXGISwapChain1> m_swapChain;
+  winrt::com_ptr<IDCompositionDevice> m_compositionDevice;
+  winrt::com_ptr<IDCompositionTarget> m_compositionTarget;
+  winrt::com_ptr<IDCompositionVisual> m_compositionVisual;
   winrt::com_ptr<ID3D11VertexShader> m_vs;
   winrt::com_ptr<ID3D11PixelShader> m_ps;
   winrt::com_ptr<ID3D11InputLayout> m_inputLayout;

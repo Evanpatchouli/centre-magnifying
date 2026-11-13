@@ -34,7 +34,7 @@ CENTRE_MAGNIFYING_WEBGL_PROBE_LOGS=true
 * 系统托盘菜单：设置 / 退出
 * 设置窗口可选择当前系统中的目标应用窗口
 * 设置窗口中的开关和全局快捷键可立即切换放大镜显示状态；应用设置时保持当前状态
-* 可配置捕获半径、缩放比例、帧率、图像平滑
+* 可配置捕获半径、缩放比例、帧率、边缘柔化；开启后放大镜边缘会逐渐虚化并融入背景
 * 捕获目标窗口并放大其中心区域，支持 Canvas 2D、WebGL 和 Native WGC 渲染
 
 ## 为什么捕获目标窗口，而不是屏幕中心？
@@ -65,6 +65,8 @@ npm run build:addon
 该命令使用项目安装的 Electron 版本及其头文件编译模块；首次运行需要联网下载头文件。编译成功后重新启动开发应用，设置中的 Native WGC 选项即可使用。捕获受保护内容或部分特殊窗口时，系统或目标应用可能不提供可用画面。
 
 需要验证本机原生捕获时，可运行 `npm run test:native-wgc`。测试会短暂显示测试窗口，并检查画面方向、窗口缩放与捕获生命周期。
+
+运行 `npm run build` 后，可用 `npm run test:edge-softening` 验证 Canvas 2D 和 WebGL 的边缘柔化开关和实际桌面混合效果。
 
 运行 `npm run build` 和 `npm run build:addon` 后，可用 `npm run test:visibility` 验证设置开关、快捷键、应用设置及渲染模式切换的显示状态联动。测试使用独立配置并短暂显示测试窗口。
 

@@ -30,6 +30,7 @@
       "libraries": [
         "d3d11.lib",
         "dxgi.lib",
+        "dcomp.lib",
         "d3dcompiler.lib",
         "runtimeobject.lib",
         "windowsapp.lib"

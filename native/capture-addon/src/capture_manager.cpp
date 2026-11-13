@@ -28,12 +28,37 @@ PSIn main(VSIn v) { PSIn o; o.p = float4(v.p, 0, 1); o.t = v.t; return o; }
 const char* g_psSrc = R"(
 Texture2D    tex    : register(t0);
 SamplerState samp   : register(s0);
-cbuffer CB  : register(b0) { float2 scale; float2 offset; }
+cbuffer CB  : register(b0) {
+  float2 scale; float2 offset;
+  float2 blurStep; float smoothing; float padding;
+}
 struct PSIn { float4 p : SV_POSITION; float2 t : TEXCOORD; };
 float4 main(PSIn i) : SV_TARGET {
-  float4 color = tex.Sample(samp, offset + i.t * scale);
-  color.a = 1.0;
-  return color;
+  float distanceFromCenter = length((i.t - 0.5) * 2.0);
+  if (distanceFromCenter >= 1.0) return float4(0, 0, 0, 0);
+
+  float2 uv = offset + i.t * scale;
+  float3 color = tex.Sample(samp, uv).rgb;
+  float alpha = 1.0;
+  if (smoothing > 0.5) {
+    // Leave the center sharp; gradually blur and fade only the outer rim.
+    float blurAmount = smoothstep(0.75, 1.0, distanceFromCenter);
+    if (blurAmount > 0.0) {
+      float2 step = blurStep * blurAmount;
+      float3 blurred = color * 4.0;
+      blurred += (tex.Sample(samp, uv + float2(step.x, 0)).rgb +
+                  tex.Sample(samp, uv - float2(step.x, 0)).rgb +
+                  tex.Sample(samp, uv + float2(0, step.y)).rgb +
+                  tex.Sample(samp, uv - float2(0, step.y)).rgb) * 2.0;
+      blurred += tex.Sample(samp, uv + step).rgb + tex.Sample(samp, uv - step).rgb +
+                 tex.Sample(samp, uv + float2(step.x, -step.y)).rgb +
+                 tex.Sample(samp, uv + float2(-step.x, step.y)).rgb;
+      color = lerp(color, blurred / 16.0, blurAmount);
+    }
+    alpha = 1.0 - smoothstep(0.80, 1.0, distanceFromCenter);
+  }
+  // DirectComposition consumes premultiplied color channels.
+  return float4(color * alpha, alpha);
 }
 )";
 
@@ -45,7 +70,10 @@ const Vertex g_quad[6] = {
   { 1,-1,1,1}, {-1,1,0,0}, {1,1,1,0},
 };
 
-struct alignas(16) CBData { float sx, sy, ox, oy; };
+struct alignas(16) CBData {
+  float sx, sy, ox, oy;
+  float blurX, blurY, smoothing, padding;
+};
 
 constexpr const wchar_t* kWC = L"CentreMagNativeOverlay";
 
@@ -216,8 +244,6 @@ void CaptureManager::UpdateOverlayBounds(int size) {
     rect.left + (rect.right - rect.left - size) / 2,
     rect.top + (rect.bottom - rect.top - size) / 2,
     size, size, SWP_NOACTIVATE);
-  HRGN rgn = CreateEllipticRgn(0, 0, size, size);
-  if (rgn && !SetWindowRgn(m_overlayHwnd, rgn, TRUE)) DeleteObject(rgn);
 }
 
 /* ==================================================================
@@ -233,8 +259,10 @@ bool CaptureManager::CreateOverlayWindow() {
   wc.style = CS_HREDRAW | CS_VREDRAW;
   RegisterClassExW(&wc);
 
+  // Keep layered-window click-through while DirectComposition supplies alpha.
   m_overlayHwnd = CreateWindowExW(
-    WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+    WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TRANSPARENT |
+      WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
     kWC, L"Centre Magnifying", WS_POPUP,
     0, 0,
     m_outputSize, m_outputSize,
@@ -273,16 +301,16 @@ bool CaptureManager::InitD3D11() {
   m_multithread->SetMultithreadProtected(TRUE);
 
   // SwapChain
-  DXGI_SWAP_CHAIN_DESC scd{};
-  scd.BufferCount = 1;
-  scd.BufferDesc.Width = m_outputSize;
-  scd.BufferDesc.Height = m_outputSize;
-  scd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  DXGI_SWAP_CHAIN_DESC1 scd{};
+  scd.BufferCount = 2;
+  scd.Width = m_outputSize;
+  scd.Height = m_outputSize;
+  scd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
   scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-  scd.OutputWindow = m_overlayHwnd;
   scd.SampleDesc.Count = 1;
-  scd.Windowed = TRUE;
-  scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+  scd.Scaling = DXGI_SCALING_STRETCH;
+  scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+  scd.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
 
   winrt::com_ptr<IDXGIDevice> dxgiDev;
   hr = m_device->QueryInterface(IID_PPV_ARGS(dxgiDev.put()));
@@ -300,10 +328,22 @@ bool CaptureManager::InitD3D11() {
   winrt::com_ptr<IDXGIFactory2> factory;
   factory.attach(rawFactory);
 
-  hr = factory->CreateSwapChain(m_device.get(), &scd, m_swapChain.put());
+  hr = factory->CreateSwapChainForComposition(m_device.get(), &scd, nullptr, m_swapChain.put());
   if (FAILED(hr)) { ProbeHr("swapchain failed", hr); return false; }
 
-  factory->MakeWindowAssociation(m_overlayHwnd, DXGI_MWA_NO_ALT_ENTER);
+  hr = DCompositionCreateDevice(dxgiDev.get(), __uuidof(IDCompositionDevice),
+    reinterpret_cast<void**>(m_compositionDevice.put()));
+  if (FAILED(hr)) { ProbeHr("composition device failed", hr); return false; }
+  hr = m_compositionDevice->CreateTargetForHwnd(m_overlayHwnd, TRUE, m_compositionTarget.put());
+  if (FAILED(hr)) { ProbeHr("composition target failed", hr); return false; }
+  hr = m_compositionDevice->CreateVisual(m_compositionVisual.put());
+  if (FAILED(hr)) { ProbeHr("composition visual failed", hr); return false; }
+  hr = m_compositionVisual->SetContent(m_swapChain.get());
+  if (FAILED(hr)) { ProbeHr("composition content failed", hr); return false; }
+  hr = m_compositionTarget->SetRoot(m_compositionVisual.get());
+  if (FAILED(hr)) { ProbeHr("composition root failed", hr); return false; }
+  hr = m_compositionDevice->Commit();
+  if (FAILED(hr)) { ProbeHr("composition commit failed", hr); return false; }
 
   // Compile shaders
   winrt::com_ptr<ID3DBlob> vsb, psb, err;
@@ -507,7 +547,7 @@ void CaptureManager::RenderFrame() {
   if (out != m_outputSize) {
     m_backBufferRTV = nullptr;
     m_context->OMSetRenderTargets(0, nullptr, nullptr);
-    HRESULT resizeHr = m_swapChain->ResizeBuffers(1, out, out, DXGI_FORMAT_B8G8R8A8_UNORM, 0);
+    HRESULT resizeHr = m_swapChain->ResizeBuffers(2, out, out, DXGI_FORMAT_B8G8R8A8_UNORM, 0);
     if (FAILED(resizeHr)) {
       ProbeHr("resize failed", resizeHr);
       return;
@@ -523,7 +563,7 @@ void CaptureManager::RenderFrame() {
     if (FAILED(rtvHr)) { ProbeHr("rtv failed", rtvHr); return; }
   }
 
-  float clr[4]{0.0f, 0.0f, 0.0f, 1.0f};
+  float clr[4]{0.0f, 0.0f, 0.0f, 0.0f};
   m_context->ClearRenderTargetView(m_backBufferRTV.get(), clr);
   ID3D11RenderTargetView* rtv = m_backBufferRTV.get();
   m_context->OMSetRenderTargets(1, &rtv, nullptr);
@@ -542,7 +582,13 @@ void CaptureManager::RenderFrame() {
   int sf = (std::min)((std::min)(ss, vw), vh);
   int sx = static_cast<int>(std::round((vw - sf) / 2.0));
   int sy = static_cast<int>(std::round((vh - sf) / 2.0));
-  CBData cb{ (float)sf/vw, (float)sf/vh, (float)sx/vw, (float)sy/vh };
+  // The nine-tap kernel's effective blur is narrower than its sample spacing.
+  const float blurPixels = (std::min)(12.0f, (std::max)(4.0f, m_outputSize * 0.012f));
+  CBData cb{
+    (float)sf/vw, (float)sf/vh, (float)sx/vw, (float)sy/vh,
+    blurPixels * sf / (m_outputSize * vw), blurPixels * sf / (m_outputSize * vh),
+    p.smoothing ? 1.0f : 0.0f, 0.0f
+  };
 
   m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   m_context->IASetInputLayout(m_inputLayout.get());
@@ -601,6 +647,9 @@ void CaptureManager::Cleanup() {
   m_vertexBuffer = nullptr;
   m_inputLayout = nullptr;
   m_ps = nullptr; m_vs = nullptr;
+  m_compositionVisual = nullptr;
+  m_compositionTarget = nullptr;
+  m_compositionDevice = nullptr;
   m_swapChain = nullptr;
   m_multithread = nullptr;
   m_context = nullptr; m_device = nullptr;
